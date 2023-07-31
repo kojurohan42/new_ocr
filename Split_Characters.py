@@ -1,6 +1,12 @@
 import cv2
 import copy
 import numpy as np
+import matplotlib.pyplot as plt
+from keras.models import load_model
+
+lowerModel =load_model('Model/devanagari_lowerMod_model.h5')
+coreModel = load_model('Model/best_val_loss.hdf5')
+upperModel = load_model('Model/devanagari_upperMod_model.h5')
 
 
 def Split(Words):
@@ -23,112 +29,265 @@ def Split(Words):
 
         _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY_INV)
 
+
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         thresh = cv2.morphologyEx(
             thresh, cv2.MORPH_DILATE, kernel, iterations=1)
-
+        plt.imshow(thresh,cmap='gray')
+        plt.show()
+        
         original_thresh = thresh.copy()
 
         h_proj = np.sum(thresh, axis=1)
-        Max = np.max(h_proj) / 2
+        print(len(h_proj))
+        Max = np.max(h_proj)/1.1
+        print(Max)
 
         upper = None
         lower = None
         for i in range(h_proj.shape[0]):
             proj = h_proj[i]
+            
 
             if proj > Max and upper == None:
                 upper = i
             elif proj < Max and upper != None and lower == None:
                 lower = i
                 break
+        print(upper, lower)
 
-        if lower == None or lower > int(h_proj.shape[0] / 2):
-            lower = int(h_proj.shape[0] / 2)
-
-        for row in range(max(int(h_proj.shape[0] / 4), lower)):
-            thresh[row] = 0
-
-        contours, _ = cv2.findContours(
-            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-        bounding_rects = []
-        for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
-
-            if w * h > 25 and h > 5:
-                new_y = 0
-                new_h = min(Word.shape[0], h + y + 3)
-
-                bounding_rects.append([x, new_y, w, new_h])
-
-        bounding_rects.sort(key=lambda x: x[0] + int(x[2] / 2))
-
-        index = 0
-        Length = len(bounding_rects)
-        while index < (Length - 1):
-            x, y, w, h = bounding_rects[index]
-
-            x_left = max(x, bounding_rects[index + 1][0])
-            y_top = max(y, bounding_rects[index + 1][1])
-            x_right = min(
-                x + w,  bounding_rects[index + 1][0] + bounding_rects[index + 1][2])
-            y_bottom = min(
-                y + h, bounding_rects[index + 1][1] + bounding_rects[index + 1][3])
-
-            intersection_area = max(0, (x_right - x_left)) * \
-                max(0, (y_bottom - y_top))
-            union = float((bounding_rects[index][2] * bounding_rects[index][3]) + (
-                bounding_rects[index + 1][2] * bounding_rects[index + 1][3]) - intersection_area)
-
-            area_ratio = (bounding_rects[index + 1][2]
-                          * bounding_rects[index + 1][3]) / union
-
-            ratio = (bounding_rects[index + 1][2] *
-                     bounding_rects[index + 1][3]) / (w * h)
-
-            if bounding_rects[index + 1][3] / bounding_rects[index + 1][2] > 3 or ratio <= 0.25 or (area_ratio > 0.9 and intersection_area != 0):
-                x = min(bounding_rects[index][0], bounding_rects[index + 1][0])
-                w = max(bounding_rects[index][0] + bounding_rects[index][2],
-                        bounding_rects[index + 1][0] + bounding_rects[index + 1][2]) - x
-                y = min(bounding_rects[index][1], bounding_rects[index + 1][1])
-                h = max(bounding_rects[index][1] + bounding_rects[index][3],
-                        bounding_rects[index + 1][1] + bounding_rects[index + 1][3]) - y
-
-                bounding_rects[index] = (x, y, w, h)
-                del bounding_rects[index + 1]
-                index -= 1
-                Length -= 1
-
-            index += 1
-
-        Word_Characters = []
-        for x, y, w, h in bounding_rects:
-            new_x = max(0, x - 3)
-            new_w = min(Word.shape[1] - new_x, w + (x - new_x) + 3)
-
-            crop = original_thresh[y:y + h, new_x:new_x + new_w]
-
-            h_proj = np.sum(crop, axis=1)
-
-            padding = None
-            for i in range(h_proj.shape[0]):
-                proj = h_proj[i]
-
-                if proj != 0:
-                    padding = i
-                    break
-
-            new_y = padding
-            new_h = min(Word.shape[0] - new_y, h + new_y + 3)
-
-            size = max(new_w, new_h)
-            Character = np.zeros((size, size, 3), np.uint8)
-            Character.fill(255)
-
-            Character[int((size - new_h) / 2):int((size + new_h) / 2), int((size - new_w) / 2):int((size + new_w) / 2)] = Word[new_y:new_y + new_h, new_x:new_x + new_w]
-            Word_Characters.append(Character.copy())
-
-        Characters.append(copy.deepcopy(Word_Characters))
+        if thresh.shape[1] > 100:
+            for row in range(upper-7 if upper>7 else upper,lower+7):
+                thresh[row] = 0
+        plt.imshow(thresh,cmap='gray')
+        plt.show()
+        base = identify_lower_baseline(thresh)
+        print("lower",base)
+        
+        segments=character_segmentation(thresh)
+        for simg in segments[0]:
+            plt.imshow(simg)
+            plt.show()
+            seg = modifier_segmentation(simg,base)
+            
 
     return Characters
+
+def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
+    try:
+        shape = bordered.shape
+        check = int(scheck * shape[0])
+        image = bordered[:]
+        image = image[check:].T
+        shape = image.shape
+        bg = np.repeat(255, shape[1])
+        bg_keys = []
+        for row in range(1, shape[0]):
+            if  (np.equal(bg, image[row]).any()):
+                bg_keys.append(row) 
+        print(bg_keys)
+
+        lenkeys = len(bg_keys)-1
+        new_keys = [bg_keys[1], bg_keys[-1]]
+        print(new_keys)
+        #print(lenkeys)
+        for i in range(1, lenkeys):
+            if (bg_keys[i+1] - bg_keys[i]) > check:
+                new_keys.append(bg_keys[i])
+                new_keys.append(bg_keys[i+1])
+                #print(i)
+
+        new_keys = sorted(new_keys)
+        print(new_keys)
+        segmented_templates = []
+        first = new_keys[0]
+        bounding_boxes = []
+        for i in range(1,len(new_keys)-1,2):
+            segment = bordered.T[first:new_keys[i]]
+            if segment.shape[0]>=min_seg and segment.shape[1]>=min_seg:
+                print('here')
+                segmented_templates.append(segment.T)
+                bounding_boxes.append((first, new_keys[i]))
+            first = new_keys[i+1]       
+        last_segment = bordered.T[new_keys[-2]:]
+
+        
+        if last_segment.shape[0]>=min_seg and last_segment.shape[1]>=min_seg:
+            segmented_templates.append(last_segment.T)
+            bounding_boxes.append((new_keys[-1], new_keys[-1]+last_segment.shape[0]))
+
+        return(segmented_templates, bounding_boxes)
+    except:
+        return [bordered, (0, bordered.shape[1])]
+    
+
+def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
+    try:
+        print("try")
+        shape = bordered.shape
+        print(shape)
+        check = int(scheck * shape[1])
+        checkhor = int(0.05 * shape[0])
+        image = bordered[:]
+        #find the background color for empty column
+        bg = np.repeat(255, shape[1])
+        bg_keys = []
+        print(shape)
+        print("ss")
+        for row in range(1, shape[0]):
+            if  (np.equal(bg, image[row]).any()):
+                bg_keys.append(row) 
+        print(bg_keys)
+        
+
+        lenkeys = len(bg_keys)-1
+        new_keys = [bg_keys[0], bg_keys[-1]]
+        print(new_keys)
+        for i in range(1, lenkeys):
+            if (bg_keys[i+1] - bg_keys[i]) > check or (bg_keys[i+1] - bg_keys[i]) > checkhor:
+                new_keys.append(bg_keys[i])
+                new_keys.append(bg_keys[i+1])
+    
+        
+        print("vas",base)
+        new_keys = sorted(new_keys)
+        print("traile",new_keys)
+        segmented_templates = []
+        first = new_keys[0]
+        last = new_keys[-1]
+        bounding_boxes = []
+        if len(new_keys) >2 :
+            upper_modifier = bordered[first:new_keys[1]]
+            predit_uppper(upper_modifier)
+            first = new_keys[2]
+        core_modifier = bordered[first:base]
+        # plt.imshow(core_modifier)
+        # plt.show()
+        cores = aakar_seg(core_modifier)
+        for core in cores:
+            predit_core(core)
+            
+        lower_modifier = bordered[base:last]
+        if lower_modifier.shape[0]>=min_seg and lower_modifier.shape[1]>=min_seg: 
+            predit_lower(lower_modifier)
+
+
+        return(segmented_templates, bounding_boxes)
+    except:
+        return [bordered, (0, bordered.shape[1])]
+    
+
+def identify_lower_baseline(image):
+    height, width = image.shape
+    print("height", height,width)
+    transitions = []
+    
+    for row in range(height):
+        sum = 0 
+        for i in range(width-1):
+            if image[row][i] != image[row][i+1]:
+                sum +=1
+        transitions.append(sum)
+    mean = np.mean(transitions)
+    
+    print('transitions',transitions)
+    print("mewn",mean)
+    for row in range(height-1, height//2, -1):
+        print('herr')
+        print(transitions[row])
+        if transitions[row] >= mean:
+            base = row+10
+            print('vase',base)
+            return base
+
+    return height
+    
+
+
+def aakar_seg(bordered,thresh = 255, scheck=0.15):
+    try:
+        shape = bordered.shape
+        check = int(scheck * shape[1])
+        image = bordered[:]
+        image = image[check:].T
+        shape = image.shape
+
+        #find the background color for empty column
+        bg = np.repeat(255 - thresh, shape[1])
+        bg_keys = []
+        for row in range(1, shape[0]):
+            if  (np.equal(bg, image[row]).all()):
+                bg_keys.append(row)            
+
+        lenkeys = len(bg_keys)-1
+        new_keys = [bg_keys[1], bg_keys[-1]]
+        #print(lenkeys)
+        for i in range(1, lenkeys):
+            if (bg_keys[i+1] - bg_keys[i]) > check:
+                new_keys.append(bg_keys[i])
+                #print(i)
+
+        new_keys = sorted(new_keys)
+        #print(new_keys)
+        segmented_templates = []
+        first = 0
+        for key in new_keys[1:]:
+            segment = bordered.T[first:key]
+            if segment.shape[0]>=check and segment.shape[1]>=check:
+                segmented_templates.append(segment.T)
+
+            first = key
+        last_segment = bordered.T[new_keys[-1]:]
+        if last_segment.shape[0]>=check and last_segment.shape[1]>=check:
+            segmented_templates.append(last_segment.T)
+        
+        #check if each segment shape is enough to do recognition
+        
+
+        return(segmented_templates)
+    except:
+        return [bordered]
+    
+
+def predit_uppper(image):
+
+    plt.imshow(image, cmap='gray')
+    plt.show()
+    inverted_image = cv2.bitwise_not(image)
+    rgb_image = cv2.cvtColor(inverted_image, cv2.COLOR_GRAY2RGB)
+    resized_image = cv2.resize(rgb_image, (32, 32))
+
+    # Preprocess the image to match the input requirements of VGG16
+    preprocessed_image = resized_image.astype('float32')
+    preprocessed_image /= 255.0
+    x = preprocessed_image.reshape(1, 32, 32, 3)
+    y = np.argmax(upperModel.predict(x))
+    print("Upper Modifiers",y)
+
+
+def predit_core(image):
+    plt.imshow(image, cmap='gray')
+    plt.show()
+    print("------------------------")
+    thresh = cv2.resize(image, (32, 32), interpolation = cv2.INTER_AREA)
+    plt.imshow(thresh)
+    plt.show()
+    x = np.array([thresh]).reshape(-1, 32, 32, 1) / 255.0
+    y = np.argmax(coreModel.predict(x))
+    print("core Modifiers",y)
+
+def predit_lower(image):
+    plt.imshow(image, cmap='gray')
+    plt.show()
+    inverted_image = cv2.bitwise_not(image)
+    rgb_image = cv2.cvtColor(inverted_image, cv2.COLOR_GRAY2RGB)
+    resized_image = cv2.resize(rgb_image, (32, 32))
+
+    # Preprocess the image to match the input requirements of VGG16
+    preprocessed_image = resized_image.astype('float32')
+    preprocessed_image /= 255.0
+    x = preprocessed_image.reshape(1, 32, 32, 3)
+    y = np.argmax(lowerModel.predict(x))
+    print("Upper Modifiers",y)
+
+

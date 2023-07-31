@@ -5,7 +5,7 @@ import Split_Words
 import Split_Characters
 import Predict_Characters
 
-Path = '/home/xolo42/Desktop/projects/Devangari-ocr/Words'
+Path = '/home/xolo42/Desktop/projects/Devangari-ocr/check'
 Images = sorted(os.listdir(Path), key=lambda x: int(os.path.splitext(x)[0]))
 
 for Image_Name in Images:
