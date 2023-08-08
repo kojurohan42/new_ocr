@@ -3,14 +3,15 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 from keras.models import load_model
+import string_interpolate
 
 lowerModel =load_model('Model/devanagari_lowerMod_model.h5')
-coreModel = load_model('Model/best_val_loss.hdf5')
+coreModel = load_model('Model/backup_last_model.hdf5')
 upperModel = load_model('Model/devanagari_upperMod_model.h5')
-
+lower_modifiers = [0x941,0x942, 0x943,0x094D] 
 
 def Split(Words):
-    Characters = []
+    words = ''
 
     for Word in Words:
         gray = cv2.cvtColor(Word, cv2.COLOR_BGR2GRAY)
@@ -63,15 +64,28 @@ def Split(Words):
         plt.show()
         base = identify_lower_baseline(thresh)
         print("lower",base)
-        
+        word = ''
         segments=character_segmentation(thresh)
+        # characters = []
         for simg in segments[0]:
             plt.imshow(simg)
             plt.show()
             seg = modifier_segmentation(simg,base)
-            
+            word += seg
+            # print(characters)
+        # word = ''.join(characters)
+        print(word)
+        # words += word
+        words += (word + ' ')
+        # print(word)
+        # new_word = string_interpolate.generate_word(word) 
+        # print(new_word)
+        # word = string_interpolate.generate_word(characters)
+        # words += word
+        # words = ['ि','क', 'र', 'ा']
 
-    return Characters
+    print(words)
+    return words
 
 def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
     try:
@@ -98,6 +112,7 @@ def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
                 #print(i)
 
         new_keys = sorted(new_keys)
+        print("helo there")
         print(new_keys)
         segmented_templates = []
         first = new_keys[0]
@@ -108,7 +123,7 @@ def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
                 print('here')
                 segmented_templates.append(segment.T)
                 bounding_boxes.append((first, new_keys[i]))
-            first = new_keys[i+1]       
+            first = new_keys[i+1]  
         last_segment = bordered.T[new_keys[-2]:]
 
         
@@ -155,24 +170,57 @@ def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
         segmented_templates = []
         first = new_keys[0]
         last = new_keys[-1]
-        bounding_boxes = []
+        # bounding_boxes = []
+        upper_pred = 10
         if len(new_keys) >2 :
             upper_modifier = bordered[first:new_keys[1]]
-            predit_uppper(upper_modifier)
+            upper_pred  = predit_uppper(upper_modifier)
             first = new_keys[2]
+        print(upper_pred)
+        print("pringpring")
+        print(first, base)
+        print(first, base)
         core_modifier = bordered[first:base]
         # plt.imshow(core_modifier)
         # plt.show()
-        cores = aakar_seg(core_modifier)
-        for core in cores:
-            predit_core(core)
-            
+        cores_imgs = aakar_seg(core_modifier)
+        cores = []
+        for c in cores_imgs:
+            cores.append(predit_core(c))
+
+        result = []
+        print(f"leng of {len(cores)}")
+        if len(cores) == 1:
+            if upper_pred == 10:
+                result += string_interpolate.stringInterpolate(cores[0])
+            else:
+                result += string_interpolate.stringInterpolate(cores[0],upper_pred)
+        else:
+            print(f"core z {cores[0]}")
+            print(f"core 1 {cores[1]}")
+            if cores[0] == 68:
+                if cores[1] >= 42:
+                    cores[1] -= 42 
+                
+                result += string_interpolate.stringInterpolate(cores[1])
+                result += [0x93F] 
+            else:
+                if upper_pred == 10:
+                    result += string_interpolate.stringInterpolate(cores[0])
+                    result += string_interpolate.stringInterpolate(cores[1])
+                else:
+                    result += string_interpolate.stringInterpolate(cores[0])
+                    result += string_interpolate.stringInterpolate(cores[1],upper_pred)
+        # print(string_interpolate.generate_word(result))    
         lower_modifier = bordered[base:last]
         if lower_modifier.shape[0]>=min_seg and lower_modifier.shape[1]>=min_seg: 
-            predit_lower(lower_modifier)
+            lowerMod = predit_lower(lower_modifier)
+            result.append(lower_modifiers[lowerMod])
+        
+        result = string_interpolate.generate_word(result)
+        print(result)
 
-
-        return(segmented_templates, bounding_boxes)
+        return result
     except:
         return [bordered, (0, bordered.shape[1])]
     
@@ -228,7 +276,8 @@ def aakar_seg(bordered,thresh = 255, scheck=0.15):
                 #print(i)
 
         new_keys = sorted(new_keys)
-        #print(new_keys)
+        print("mnew")
+        print(new_keys)
         segmented_templates = []
         first = 0
         for key in new_keys[1:]:
@@ -263,20 +312,29 @@ def predit_uppper(image):
     x = preprocessed_image.reshape(1, 32, 32, 3)
     y = np.argmax(upperModel.predict(x))
     print("Upper Modifiers",y)
+    return y
 
 
 def predit_core(image):
-    plt.imshow(image, cmap='gray')
+    if image.shape[1] < image.shape[0] - 10:
+        pad_width = (image.shape[0] - 10 - image.shape[1]) // 2
+        padded_image = np.pad(image, ((0, 0), (pad_width, pad_width)), mode='constant', constant_values=0)
+    else:
+        padded_image = image
+
+    plt.imshow(padded_image,)
     plt.show()
     print("------------------------")
-    thresh = cv2.resize(image, (32, 32), interpolation = cv2.INTER_AREA)
+    thresh = cv2.resize(padded_image, (32, 32), interpolation = cv2.INTER_AREA)
     plt.imshow(thresh)
     plt.show()
     x = np.array([thresh]).reshape(-1, 32, 32, 1) / 255.0
     y = np.argmax(coreModel.predict(x))
     print("core Modifiers",y)
+    return y
 
 def predit_lower(image):
+    
     plt.imshow(image, cmap='gray')
     plt.show()
     inverted_image = cv2.bitwise_not(image)
@@ -289,5 +347,6 @@ def predit_lower(image):
     x = preprocessed_image.reshape(1, 32, 32, 3)
     y = np.argmax(lowerModel.predict(x))
     print("Upper Modifiers",y)
+    return y
 
 

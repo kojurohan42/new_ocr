@@ -20,19 +20,20 @@ def upload():
         img = cv2.imread("./uploadedimages/" + filename)
         os.remove("./uploadedimages/" + filename)
         Words = Split_Words.Split(img)
-        Characters = Split_Characters.Split(Words)
-        Predictions = Predict_Characters.Predict(Characters)
+        words = Split_Characters.Split(Words)
+        # Predictions = Predict_Characters.Predict(Characters)
+        # print(words)
 
-        Words = []
-        for Prediction in Predictions:
-            Word = ''.join(Prediction)
-            Words.append(Word)
-        Words = ' '.join(Words)
+        # Words = []
+        # for Prediction in words:
+        #     Word = ''.join(Prediction)
+        #     Words.append(Word)
+        # Words = ' '.join(words)
         
 
 
         return jsonify({
-            "message": Words
+            "message": words
         })
 
 
