@@ -43,13 +43,12 @@ def Split(Words):
         print(len(h_proj))
         Max = np.max(h_proj)/1.1
         print(Max)
-
+        
         upper = None
         lower = None
         for i in range(h_proj.shape[0]):
             proj = h_proj[i]
-            
-
+            print(proj)
             if proj > Max and upper == None:
                 upper = i
             elif proj < Max and upper != None and lower == None:
@@ -58,7 +57,7 @@ def Split(Words):
         print(upper, lower)
 
         if thresh.shape[1] > 100:
-            for row in range(upper-7 if upper>7 else upper,lower+7):
+            for row in range(upper-int(thresh.shape[1]/35) if upper>int(thresh.shape[1]/35) else upper,lower+int(thresh.shape[1]/35)):
                 thresh[row] = 0
         plt.imshow(thresh,cmap='gray')
         plt.show()
@@ -68,26 +67,25 @@ def Split(Words):
         segments=character_segmentation(thresh)
         # characters = []
         for simg in segments[0]:
+ # Assuming white pixels are represented as 255
             plt.imshow(simg)
             plt.show()
-            seg = modifier_segmentation(simg,base)
+            seg = modifier_segmentation(simg, base)
+            # Perform modifier_segmentation on the segment
+        
+            # Append the result to the word string
             word += seg
+
             # print(characters)
         # word = ''.join(characters)
         print(word)
         # words += word
         words += (word + ' ')
-        # print(word)
-        # new_word = string_interpolate.generate_word(word) 
-        # print(new_word)
-        # word = string_interpolate.generate_word(characters)
-        # words += word
-        # words = ['ि','क', 'र', 'ा']
 
     print(words)
     return words
 
-def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
+def character_segmentation(bordered, thresh=255, min_seg=10, scheck=0.15):
     try:
         shape = bordered.shape
         check = int(scheck * shape[0])
@@ -102,7 +100,7 @@ def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
         print(bg_keys)
 
         lenkeys = len(bg_keys)-1
-        new_keys = [bg_keys[1], bg_keys[-1]]
+        new_keys = [bg_keys[0], bg_keys[-1]]
         print(new_keys)
         #print(lenkeys)
         for i in range(1, lenkeys):
@@ -118,16 +116,17 @@ def character_segmentation(bordered, thresh=255, min_seg=5, scheck=0.15):
         first = new_keys[0]
         bounding_boxes = []
         for i in range(1,len(new_keys)-1,2):
-            segment = bordered.T[first:new_keys[i]]
-            if segment.shape[0]>=min_seg and segment.shape[1]>=min_seg:
+            segment = bordered.T[first-10:new_keys[i]+10]
+            print(np.sum(segment == 255))
+            if segment.shape[0]>=min_seg and segment.shape[1]>=min_seg and np.sum(segment == 255)>200:
                 print('here')
                 segmented_templates.append(segment.T)
                 bounding_boxes.append((first, new_keys[i]))
             first = new_keys[i+1]  
-        last_segment = bordered.T[new_keys[-2]:]
+        last_segment = bordered.T[new_keys[-2]-10:new_keys[-1]+10]
 
         
-        if last_segment.shape[0]>=min_seg and last_segment.shape[1]>=min_seg:
+        if last_segment.shape[0]>=min_seg and last_segment.shape[1]>=min_seg and np.sum(last_segment == 255)>200:
             segmented_templates.append(last_segment.T)
             bounding_boxes.append((new_keys[-1], new_keys[-1]+last_segment.shape[0]))
 
@@ -167,15 +166,16 @@ def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
         print("vas",base)
         new_keys = sorted(new_keys)
         print("traile",new_keys)
-        segmented_templates = []
         first = new_keys[0]
         last = new_keys[-1]
         # bounding_boxes = []
         upper_pred = 10
         if len(new_keys) >2 :
             upper_modifier = bordered[first:new_keys[1]]
-            upper_pred  = predit_uppper(upper_modifier)
-            first = new_keys[2]
+            print(np.sum(upper_modifier==255))
+            if np.sum(upper_modifier == 255) > 50:
+                upper_pred  = predit_uppper(upper_modifier)
+            first = new_keys[2]-10
         print(upper_pred)
         print("pringpring")
         print(first, base)
@@ -186,10 +186,18 @@ def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
         cores_imgs = aakar_seg(core_modifier)
         cores = []
         for c in cores_imgs:
-            cores.append(predit_core(c))
+            print(np.sum(c==255))
+            if np.sum(c == 255) > 100:
+                plt.imshow(c)
+                plt.show()
+
+                cores.append(predit_core(c))
+                # cores.append(predit_core(c))
 
         result = []
+        print(f"upper mod{upper_pred}")
         print(f"leng of {len(cores)}")
+
         if len(cores) == 1:
             if upper_pred == 10:
                 result += string_interpolate.stringInterpolate(cores[0])
@@ -213,7 +221,8 @@ def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
                     result += string_interpolate.stringInterpolate(cores[1],upper_pred)
         # print(string_interpolate.generate_word(result))    
         lower_modifier = bordered[base:last]
-        if lower_modifier.shape[0]>=min_seg and lower_modifier.shape[1]>=min_seg: 
+        print(np.sum(lower_modifier==255))
+        if lower_modifier.shape[0]>=min_seg and lower_modifier.shape[1]>=min_seg and np.sum(c == 255) > 50: 
             lowerMod = predit_lower(lower_modifier)
             result.append(lower_modifiers[lowerMod])
         
@@ -224,6 +233,7 @@ def modifier_segmentation(bordered,base, thresh=255, min_seg=5, scheck=0.15):
     except:
         return [bordered, (0, bordered.shape[1])]
     
+
 
 def identify_lower_baseline(image):
     height, width = image.shape
@@ -244,7 +254,7 @@ def identify_lower_baseline(image):
         print('herr')
         print(transitions[row])
         if transitions[row] >= mean:
-            base = row+10
+            base = row+int(height/10)
             print('vase',base)
             return base
 
@@ -266,7 +276,7 @@ def aakar_seg(bordered,thresh = 255, scheck=0.15):
         for row in range(1, shape[0]):
             if  (np.equal(bg, image[row]).all()):
                 bg_keys.append(row)            
-
+        print(bg_keys)
         lenkeys = len(bg_keys)-1
         new_keys = [bg_keys[1], bg_keys[-1]]
         #print(lenkeys)
@@ -274,7 +284,7 @@ def aakar_seg(bordered,thresh = 255, scheck=0.15):
             if (bg_keys[i+1] - bg_keys[i]) > check:
                 new_keys.append(bg_keys[i])
                 #print(i)
-
+        print(new_keys)
         new_keys = sorted(new_keys)
         print("mnew")
         print(new_keys)
@@ -282,18 +292,18 @@ def aakar_seg(bordered,thresh = 255, scheck=0.15):
         first = 0
         for key in new_keys[1:]:
             segment = bordered.T[first:key]
-            if segment.shape[0]>=check and segment.shape[1]>=check:
+            if segment.shape[0]>=check and segment.shape[1]>=check and np.sum(segment == 255) > 50:
                 segmented_templates.append(segment.T)
 
             first = key
         last_segment = bordered.T[new_keys[-1]:]
-        if last_segment.shape[0]>=check and last_segment.shape[1]>=check:
+        if last_segment.shape[0]>=check and last_segment.shape[1]>=check and np.sum(last_segment == 255) > 50:
             segmented_templates.append(last_segment.T)
         
         #check if each segment shape is enough to do recognition
         
 
-        return(segmented_templates)
+        return (segmented_templates)
     except:
         return [bordered]
     
@@ -317,11 +327,11 @@ def predit_uppper(image):
 
 def predit_core(image):
     if image.shape[1] < image.shape[0] - 10:
-        pad_width = (image.shape[0] - 10 - image.shape[1]) // 2
+        pad_width = (image.shape[0] - 10 - image.shape[1]) // 3
         padded_image = np.pad(image, ((0, 0), (pad_width, pad_width)), mode='constant', constant_values=0)
     else:
         padded_image = image
-
+    padded_image[:5, image.shape[1]//10:-image.shape[1]//10] = 255 
     plt.imshow(padded_image,)
     plt.show()
     print("------------------------")
@@ -329,8 +339,16 @@ def predit_core(image):
     plt.imshow(thresh)
     plt.show()
     x = np.array([thresh]).reshape(-1, 32, 32, 1) / 255.0
-    y = np.argmax(coreModel.predict(x))
+    # print(coreModel.predict(x))
+    # y = np.argmax(coreModel.predict(x))
+    
+    predictions = coreModel.predict(x)
+    print(predictions)
+    y = np.argmax(predictions)
+    confidence = predictions[0, y]  # Get the confidence/probability of the predicted class
     print("core Modifiers",y)
+    print("Predicted class:", y)
+    print("Confidence:", confidence)
     return y
 
 def predit_lower(image):

@@ -7,7 +7,7 @@ import Split_Words
 import Split_Characters
 import Predict_Characters
 
-img = cv2.imread("kira.jpg")
+img = cv2.imread("new.jpg")
 
 Words = Split_Words.Split(img)
 Split_Characters.Split(Words)

@@ -173,7 +173,7 @@ def Split_Image_Words(img,crop):
     x = 100
     shape = img.shape
     print(shape)
-    for x in range(0, shape[1],60):
+    for x in range(0, shape[1],int(shape[1]/4)):
         for y in range(shape[0]):
             if img[y][x] == 255 and y<shape[0]/1.5:
                 P.append((x,y))
@@ -183,7 +183,7 @@ def Split_Image_Words(img,crop):
 
 # Determine eligibility of each pixel in P
 
-
+    print(P)
     T = set()
 
 
@@ -215,11 +215,11 @@ def Split_Image_Words(img,crop):
 
     # Compute the angle with the x-axis
     angle = np.arctan(slope) * 180 / np.pi
-
+    print(shape[0])
     print("Angle with the x-axis:", angle, "degrees")
     if angle < -45:
         angle = -(90 + angle)  
-    elif shape[0] <70*3 and abs(angle) > 10:
+    elif shape[0] < 70*3 and abs(angle) > 10:
         print('here')
         angle = 0 
  
@@ -229,7 +229,7 @@ def Split_Image_Words(img,crop):
     else:
         # angle = angle/1.5
         # angle = angle/1.15
-        angle = 0
+        angle = angle
 
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)

@@ -4,7 +4,9 @@ core_modifiers = [0x915, 0x916, 0x917, 0x918, 0x919, 0x91a, 0x91b, 0x91c, 0x91d,
 
 def generate_word(unicode_list):
     return ''.join([chr(code) for code in unicode_list])
+
 def stringInterpolate(coreMod,upperMod=10):
+    print(coreMod, upperMod)
     if coreMod == 68:
         if upperMod == 0:
             return [0x940]
@@ -24,7 +26,6 @@ def stringInterpolate(coreMod,upperMod=10):
             res = [0x901]
         elif upperMod == 4:
             res =[0x902]
-        
         if coreMod == 33:
             return [0x915, 0x094D, 0x937] + res
         elif coreMod == 34:
@@ -34,7 +35,16 @@ def stringInterpolate(coreMod,upperMod=10):
         elif coreMod < 33:
             return [core_modifiers[coreMod]]+ res
         elif 35 < coreMod < 42:
-            return [core_modifiers[coreMod]-3]+ res
+            return [core_modifiers[coreMod-3]]+ res
+        elif 46 < coreMod < 50:
+            return [core_modifiers[coreMod-40]]+ res
+        elif  50 <= coreMod <= 52:
+            return [core_modifiers[coreMod-36]]+ res
+        elif  53 <= coreMod <= 62:
+            return [core_modifiers[coreMod-35]]+ res
+        elif  63 <= coreMod <= 67:
+            return [core_modifiers[coreMod-34]]+ res
+        
     elif upperMod == 10:
         if coreMod == 33:
             return [0x915, 0x094D, 0x937]
@@ -45,7 +55,19 @@ def stringInterpolate(coreMod,upperMod=10):
         elif coreMod < 33:
             return [core_modifiers[coreMod]]
         elif 35 < coreMod < 42:
-            return [core_modifiers[coreMod]-3]
-        elif 41 < coreMod < 68:
-            return [core_modifiers[coreMod]-41,0x094D]
+            return [core_modifiers[coreMod-3]]
+        elif 41 < coreMod < 46:
+            return [core_modifiers[coreMod-42]]
+        elif coreMod == 46:
+            return [core_modifiers[coreMod-41]]
+        elif 46 < coreMod < 50:
+            return [core_modifiers[coreMod-40]]
+        elif  50 <= coreMod <= 52:
+            return [core_modifiers[coreMod-36]]
+        elif  53 <= coreMod <= 62:
+            return [core_modifiers[coreMod-35]]
+        elif  63 <= coreMod <= 67:
+            return [core_modifiers[coreMod-34]]
+    else:
+        return []
     
